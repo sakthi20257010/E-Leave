@@ -13,6 +13,7 @@ const app = express();
 
 const allowedOrigins = [
   "http://localhost:5173",
+  "https://e-leave-tawny.vercel.app",
   "https://e-leave-bjs2.vercel.app",
 ];
 
