@@ -3,9 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./style.css";
 
-const API =
-  import.meta.env.VITE_API_URL ||
-  "http://localhost:5000/api";
+const API = (import.meta.env.VITE_API_URL || "http://localhost:5000/api").replace(/\/$/, "");
 
 async function api(path, token, opts = {}) {
   const r = await fetch(API + path, {
@@ -16,7 +14,10 @@ async function api(path, token, opts = {}) {
     },
   });
 
-  const d = await r.json();
+  const contentType = r.headers.get("content-type") || "";
+  const d = contentType.includes("application/json")
+    ? await r.json()
+    : { message: `Server returned HTTP ${r.status}. Check API URL and backend deployment.` };
 
   if (!r.ok) throw Error(d.message || "Request failed");
 
@@ -51,9 +52,9 @@ function App() {
   const leaveRequestsRef = useRef(null);
 
   const yearOptions = [
-    "I BSC COMPUTER SCIENCE",
-    "II BSC COMPUTER SCIENCE",
-    "III BSC COMPUTER SCIENCE",
+    "I B.Sc. Computer Science",
+    "II B.Sc. Computer Science",
+    "III B.Sc. Computer Science",
   ];
 
   async function refresh(u = user, t = token) {
@@ -453,6 +454,31 @@ function App() {
                   )
                 )}
               </div>
+
+              {/* TODAY'S ATTENDANCE */}
+              <section className="card">
+                <p className="tag">ATTENDANCE OVERVIEW</p>
+                <h2>Today's attendance</h2>
+                <p className="sub">
+                  {data.attendance?.date || "Today"} · Students with an approved leave covering today count as absent.
+                </p>
+                <div className="metrics">
+                  <Metric title="Present" n={data.attendance?.present ?? 0} />
+                  <Metric title="Absent on approved leave" n={data.attendance?.absent ?? 0} />
+                  <Metric title="Total students" n={data.attendance?.total_students ?? 0} />
+                </div>
+                <h3>Year-wise attendance</h3>
+                <div className="faculty">
+                  {(data.attendance?.by_year || []).map((y) => (
+                    <article key={y.year_level}>
+                      <b>{y.year_level}</b>
+                      <p>{y.present} present</p>
+                      <p>{y.absent} absent</p>
+                      <small>{y.total_students} students total</small>
+                    </article>
+                  ))}
+                </div>
+              </section>
 
               {/* FACULTY WORKLOAD */}
               <section className="card">
