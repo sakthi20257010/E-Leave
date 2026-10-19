@@ -78,6 +78,21 @@ app.get("/api/health", (q, s) => {
   });
 });
 
+// Database readiness check (useful for hosted deployment diagnostics)
+app.get("/api/health/db", async (q, s) => {
+  try {
+    await pool.query("SELECT 1");
+    s.json({ ok: true, database: "connected" });
+  } catch (error) {
+    console.error("Database health check failed:", error.message);
+    s.status(503).json({
+      ok: false,
+      database: "unavailable",
+      message: "Database connection failed. Check DB_HOST, DB_PORT, credentials, TLS, and provider network access.",
+    });
+  }
+});
+
 // Login
 app.post(
   "/api/auth/login",
