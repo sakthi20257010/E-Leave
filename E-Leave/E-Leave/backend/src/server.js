@@ -10,15 +10,18 @@ dotenv.config();
 
 const app = express();
 
+
 const allowedOrigins = [
   "http://localhost:5173",
-  "https://YOUR-VERCEL-DOMAIN.vercel.app",
+  "https://e-leave-bjs2.vercel.app",
 ];
 
 app.use(
   cors({
     origin: allowedOrigins,
-  }),
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
 );
 
 app.use(express.json());
