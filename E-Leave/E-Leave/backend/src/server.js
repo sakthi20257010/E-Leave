@@ -11,15 +11,21 @@ dotenv.config();
 const app = express();
 
 
-const allowedOrigins = [
+const configuredOrigins = [
+  process.env.CLIENT_URL,
+  ...(process.env.CLIENT_URLS || "").split(","),
   "http://localhost:5173",
   "https://e-leave-tawny.vercel.app",
   "https://e-leave-bjs2.vercel.app",
 ];
+const allowedOrigins = [...new Set(configuredOrigins.map((x) => x?.trim()).filter(Boolean))];
 
 app.use(
   cors({
-    origin: allowedOrigins,
+    origin(origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+      return callback(new Error("Origin not allowed by CORS"));
+    },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   })
@@ -27,8 +33,12 @@ app.use(
 
 app.use(express.json());
 
-const secret =
-  process.env.JWT_SECRET || "dev_only_change_this_secret";
+const secret = process.env.JWT_SECRET ||
+  (process.env.NODE_ENV === "production" ? "" : "dev_only_change_this_secret");
+
+if (!secret) {
+  throw new Error("JWT_SECRET must be set in production environment variables");
+}
 
 const wrap = (f) => (q, s, n) =>
   Promise.resolve(f(q, s, n)).catch(n);
@@ -207,7 +217,12 @@ app.post(
       });
     }
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
 
     if (
       start_date < today ||
@@ -381,6 +396,57 @@ app.get(
        ORDER BY year_level`,
     );
 
+    // Attendance for today (India time): an approved leave covering today counts as absent.
+    const today = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+
+    const [[attendanceTotals]] = await pool.query(
+      `SELECT
+         COUNT(*) AS total_students,
+         COALESCE(SUM(CASE WHEN EXISTS (
+           SELECT 1 FROM leave_requests l
+           WHERE l.student_user_id = u.user_id
+             AND l.status = 'Approved'
+             AND ? BETWEEN l.start_date AND l.end_date
+         ) THEN 1 ELSE 0 END), 0) AS absent,
+         COALESCE(SUM(CASE WHEN NOT EXISTS (
+           SELECT 1 FROM leave_requests l
+           WHERE l.student_user_id = u.user_id
+             AND l.status = 'Approved'
+             AND ? BETWEEN l.start_date AND l.end_date
+         ) THEN 1 ELSE 0 END), 0) AS present
+       FROM users u
+       WHERE u.role = 'STUDENT'`,
+      [today, today],
+    );
+
+    const [attendanceByYear] = await pool.query(
+      `SELECT
+         u.year_level,
+         COUNT(*) AS total_students,
+         COALESCE(SUM(CASE WHEN EXISTS (
+           SELECT 1 FROM leave_requests l
+           WHERE l.student_user_id = u.user_id
+             AND l.status = 'Approved'
+             AND ? BETWEEN l.start_date AND l.end_date
+         ) THEN 1 ELSE 0 END), 0) AS absent,
+         COALESCE(SUM(CASE WHEN NOT EXISTS (
+           SELECT 1 FROM leave_requests l
+           WHERE l.student_user_id = u.user_id
+             AND l.status = 'Approved'
+             AND ? BETWEEN l.start_date AND l.end_date
+         ) THEN 1 ELSE 0 END), 0) AS present
+       FROM users u
+       WHERE u.role = 'STUDENT'
+       GROUP BY u.year_level
+       ORDER BY u.year_level`,
+      [today, today],
+    );
+
     // Leave request list
     const [r] = await pool.query(
       `SELECT
@@ -419,6 +485,18 @@ app.get(
       years: y,
       requests: r,
       students,
+      attendance: {
+        date: today,
+        total_students: Number(attendanceTotals.total_students || 0),
+        present: Number(attendanceTotals.present || 0),
+        absent: Number(attendanceTotals.absent || 0),
+        by_year: attendanceByYear.map((row) => ({
+          ...row,
+          total_students: Number(row.total_students || 0),
+          present: Number(row.present || 0),
+          absent: Number(row.absent || 0),
+        })),
+      },
     });
   }),
 );
