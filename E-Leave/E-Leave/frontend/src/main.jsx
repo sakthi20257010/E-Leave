@@ -3,7 +3,9 @@ import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./style.css";
 
-const API = "http://localhost:5000/api";
+const API =
+  import.meta.env.VITE_API_URL ||
+  "http://localhost:5000/api";
 
 async function api(path, token, opts = {}) {
   const r = await fetch(API + path, {
