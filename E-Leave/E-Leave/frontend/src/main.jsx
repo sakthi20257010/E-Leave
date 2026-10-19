@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./style.css";
 
-const API = (import.meta.env.VITE_API_URL || "http://localhost:5000/api").replace(/\/$/, "");
+const API = (import.meta.env.VITE_API_URL || (import.meta.env.PROD ? "https://e-leave.onrender.com/api" : "http://localhost:5000/api")).replace(/\/$/, "");
 
 async function api(path, token, opts = {}) {
   const r = await fetch(API + path, {
